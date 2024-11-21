@@ -7,12 +7,23 @@
 #define MAX_ALLOCATIONS 1000
 #define HEAP_SIZE 10000
 
+#pragma pack(push,1)
+struct mem_block{
+    int is_free;
+    size_t size;
+    void* mem_ptr;
+    struct mem_block* next;
+    struct mem_block * prev;
+};
+#pragma pack(pop)
+
 struct allocation_t {
     void *ptr;
     unsigned int size;
 } allocations[MAX_ALLOCATIONS];
 
 void *heap_start = NULL;
+struct mem_block *block_list = NULL;
 unsigned int heap_used = 0;
 
 void *smalloc(unsigned int size) {
@@ -22,20 +33,48 @@ void *smalloc(unsigned int size) {
             perror("Erro ao inicializar o heap com sbrk");
             exit(1);
         }
+        // Cria primeiro bloco da lista encadeada
+        block_list = (struct mem_bloc *)heap_start;
+        block_list->is_free = 1;
+        block_list->size = HEAP_SIZE - sizeof(struct mem_block);
+        block_list->prev = NULL;
+        block_list->next = NULL;
         heap_used = 0;
     }
+    struct mem_block *current = block_list;
 
-    if (heap_used + size > HEAP_SIZE) {
-        printf("Out of memory in smalloc\n");
-        return NULL;
+    while (current != NULL){
+        if(current->is_free == 1 && current->size >= size){
+            if(current->size > size + sizeof(struct mem_block)){
+                struct mem_block *new_block = (struct mem_block *)((char *)current + sizeof(struct mem_block) + size);
+                new_block->is_free = 1;
+                new_block->size = current->size -size - sizeof(struct mem_block);
+                new_block->next = current->next;
+                new_block->prev = current;
+
+                if(current->next != NULL){
+                    current->next->prev = new_block;
+                }
+                current->next = new_block;
+                current->size = size;
+            }
+            current->is_free = 0;
+            heap_used += size;
+            return (char *)current + sizeof(struct mem_block);
+        }
+        current = current->next;
     }
-
-    void *block = heap_start + heap_used;
-    heap_used += size;
-    return block;
+    
+    printf("Out of memory in smalloc\n");
+    return NULL;
 }
 
 void sfree(void *ptr, unsigned int size) {
+    /* ---------------------------------------------------------------------------
+        
+        Verificação se há blocos adjacente e lógica para liberação dos blocos aqui
+
+     -----------------------------------------------------------------------------*/
     heap_used -= size; // Apenas ajusta o uso
 }
 
